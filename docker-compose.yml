@@ -1,8 +1,10 @@
 networks:
   pipeline-net:
+    name: pipeline-net
     driver: bridge
 
 volumes:
+  hive_metastore_pg:
   namenode_data:
   hadoop_historyserver:
 
@@ -71,5 +73,47 @@ services:
       - SERVICE_PRECONDITION=namenode:9870 resourcemanager:8088
     env_file:
       - ./hadoop-config/hadoop.env
+    networks:
+      - pipeline-net
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    container_name: hive-metastore-postgresql
+    restart: unless-stopped
+    volumes:
+      - hive_metastore_pg:/var/lib/postgresql/data
+    networks:
+      - pipeline-net
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: hive-metastore
+    restart: unless-stopped
+    env_file:
+      - ./hadoop-config/hadoop.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870 datanode:9864 hive-metastore-postgresql:5432
+    ports:
+      - "9083:9083"
+    depends_on:
+      - hive-metastore-postgresql
+    networks:
+      - pipeline-net
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: hive-server
+    restart: unless-stopped
+    env_file:
+      - ./hadoop-config/hadoop.env
+    environment:
+      - SERVICE_PRECONDITION=hive-metastore:9083
+      - HIVE_SITE_CONF_hive_metastore_uris=thrift://hive-metastore:9083
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    depends_on:
+      - hive-metastore
     networks:
       - pipeline-net
