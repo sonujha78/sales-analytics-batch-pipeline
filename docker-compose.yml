@@ -4,6 +4,7 @@ networks:
     driver: bridge
 
 volumes:
+  mysql_data:
   hive_metastore_pg:
   namenode_data:
   hadoop_historyserver:
@@ -115,5 +116,22 @@ services:
       - "10002:10002"
     depends_on:
       - hive-metastore
+    networks:
+      - pipeline-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-operational
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpass
+      - MYSQL_DATABASE=operational
+      - MYSQL_USER=sqoopuser
+      - MYSQL_PASSWORD=sqooppass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
     networks:
       - pipeline-net
