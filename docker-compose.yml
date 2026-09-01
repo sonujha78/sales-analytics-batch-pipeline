@@ -1,0 +1,75 @@
+networks:
+  pipeline-net:
+    driver: bridge
+
+volumes:
+  namenode_data:
+  hadoop_historyserver:
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    restart: unless-stopped
+    ports:
+      - "9870:9870"
+      - "8020:8020"
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=sales-analytics-cluster
+    env_file:
+      - ./hadoop-config/hadoop.env
+    networks:
+      - pipeline-net
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    restart: unless-stopped
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop-config/hadoop.env
+    networks:
+      - pipeline-net
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: resourcemanager
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop-config/hadoop.env
+    networks:
+      - pipeline-net
+
+  nodemanager1:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: nodemanager1
+    restart: unless-stopped
+    ports:
+      - "8042:8042"
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870 resourcemanager:8088
+    env_file:
+      - ./hadoop-config/hadoop.env
+    networks:
+      - pipeline-net
+
+  historyserver:
+    image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+    container_name: historyserver
+    restart: unless-stopped
+    ports:
+      - "8188:8188"
+    volumes:
+      - hadoop_historyserver:/hadoop/yarn/timeline
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870 resourcemanager:8088
+    env_file:
+      - ./hadoop-config/hadoop.env
+    networks:
+      - pipeline-net
