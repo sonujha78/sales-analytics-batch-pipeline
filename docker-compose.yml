@@ -4,6 +4,7 @@ networks:
     driver: bridge
 
 volumes:
+  airflow_postgres_data:
   mysql_data:
   hive_metastore_pg:
   namenode_data:
@@ -53,6 +54,9 @@ services:
     image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
     container_name: nodemanager1
     restart: unless-stopped
+    entrypoint: ["/bin/bash", "/nodemanager-entrypoint.sh"]
+    volumes:
+      - ./hadoop-config/nodemanager-entrypoint.sh:/nodemanager-entrypoint.sh
     ports:
       - "8042:8042"
     environment:
@@ -162,5 +166,78 @@ services:
       - ./sqoop/conf/mapred-site.xml:/opt/hadoop/etc/hadoop/mapred-site.xml
       - ./sqoop/conf/yarn-site.xml:/opt/hadoop/etc/hadoop/yarn-site.xml
       - ./spark-jobs:/opt/spark-jobs
+    networks:
+      - pipeline-net
+
+  airflow-postgres:
+    image: postgres:13
+    container_name: airflow-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    volumes:
+      - airflow_postgres_data:/var/lib/postgresql/data
+    networks:
+      - pipeline-net
+
+  airflow-init:
+    image: apache/airflow:2.7.3-python3.10
+    container_name: airflow-init
+    depends_on:
+      - airflow-postgres
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    entrypoint: /bin/bash
+    command: -c "airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com"
+    networks:
+      - pipeline-net
+
+  airflow-webserver:
+    image: apache/airflow:2.7.3-python3.10
+    container_name: airflow-webserver
+    restart: unless-stopped
+    depends_on:
+      - airflow-postgres
+      - airflow-init
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./hadoop-config/hadoop.env:/opt/hadoop.env
+    ports:
+      - "8090:8080"
+    command: webserver
+    networks:
+      - pipeline-net
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.3-python3.10
+    container_name: airflow-scheduler
+    restart: unless-stopped
+    depends_on:
+      - airflow-postgres
+      - airflow-init
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    command: scheduler
     networks:
       - pipeline-net
