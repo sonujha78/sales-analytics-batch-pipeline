@@ -24,8 +24,8 @@ def main():
     valid_csv_path = "/data/validated/csv/{}".format(run_date)
 
     # ---------- MySQL source ----------
-    mysql_schema_cols = ["created_at", "customer_id", "order_date", "order_id",
-                         "product_name", "quantity", "region", "unit_price"]
+    mysql_schema_cols = ["order_id", "customer_id", "product_name", "region",
+                         "quantity", "unit_price", "order_date", "created_at"]
     mysql_df = spark.read.csv(mysql_path, sep=",", inferSchema=True) \
         .toDF(*mysql_schema_cols)
 
