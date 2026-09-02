@@ -33,7 +33,9 @@ def main():
 
     # null checks on required fields
     mysql_null_mask = F.col("customer_id").isNull() | F.col("region").isNull() \
-        | F.col("order_id").isNull() | F.col("product_name").isNull()
+        | F.col("order_id").isNull() | F.col("product_name").isNull() \
+        | (F.trim(F.lower(F.col("region"))).isin("null", "\\n")) \
+        | (F.trim(F.lower(F.col("customer_id"))).isin("null", "\\n"))
     mysql_bad_nulls = mysql_df.filter(mysql_null_mask) \
         .withColumn("reject_reason", F.lit("null_required_field"))
 
