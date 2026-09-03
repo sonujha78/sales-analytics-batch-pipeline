@@ -9,13 +9,37 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
+
+def alert_on_failure(context):
+    """
+    Alert channel for DAG/task failures. No SMTP server or Slack webhook is
+    available in this environment, so alerts are written to a dedicated,
+    append-only file that a monitoring process (or a human) can tail/watch.
+    This satisfies the requirement for an alert-on-failure channel without
+    depending on external infra that isn't provisioned here.
+    """
+    import datetime as dt
+    ti = context.get("task_instance")
+    dag_run = context.get("dag_run")
+    run_id = dag_run.run_id if dag_run else "unknown"
+    alert_line = (
+        f"[{dt.datetime.utcnow().isoformat()}] ALERT: DAG={ti.dag_id} "
+        f"TASK={ti.task_id} RUN_ID={run_id} "
+        f"STATE=FAILED TRY={ti.try_number} "
+        f"LOG_URL={ti.log_url}\n"
+    )
+    with open("/opt/airflow/logs/ALERTS.log", "a") as f:
+        f.write(alert_line)
+
+
 default_args = {
     "owner": "sonu",
     "retries": 2,
     "retry_delay": timedelta(minutes=2),
     "retry_exponential_backoff": True,
     "max_retry_delay": timedelta(minutes=10),
-    "email_on_failure": False,  # no mail server configured in this env; logs serve as the alert channel
+    "email_on_failure": False,  # no mail server configured in this env
+    "on_failure_callback": alert_on_failure,  # writes to /opt/airflow/logs/ALERTS.log instead
 }
 
 SPARK_ENV = (
