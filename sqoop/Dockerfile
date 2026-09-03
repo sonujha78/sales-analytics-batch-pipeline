@@ -33,3 +33,12 @@ CMD ["sleep", "infinity"]
 # Sqoop 1.4.7 needs commons-lang 2.x, not bundled by default
 RUN wget -q https://repo1.maven.org/maven2/commons-lang/commons-lang/2.6/commons-lang-2.6.jar \
     -O $SQOOP_HOME/lib/commons-lang-2.6.jar
+
+# Sqoop's launch scripts reference this dir even when empty; missing it causes
+# YARN container localization to fail with FileNotFoundException
+RUN mkdir -p /opt/sqoop/libjars
+
+# libjars must contain at least one file, else Sqoop's glob-based staging
+# silently fails to create the HDFS staging dir, causing YARN container
+# localization to fail with FileNotFoundException on the libjars symlink
+RUN mkdir -p /opt/sqoop/libjars && cp /opt/sqoop/lib/commons-lang-2.6.jar /opt/sqoop/libjars/
